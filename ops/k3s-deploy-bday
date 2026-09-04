@@ -31,7 +31,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 # Parse the manifest without applying it; the restricted deployer performs writes.
-kubectl apply --dry-run=client -f "$deploy_home/deployment.yaml" -o json > "$work_dir/manifest.json"
+kubectl create --dry-run=client -f "$deploy_home/deployment.yaml" -o json > "$work_dir/manifest.json"
 image="$(jq -r '.items[] | select(.kind == "Deployment" and .metadata.name == "portal-b-day") | .spec.template.spec.containers[] | select(.name == "web") | .image' "$work_dir/manifest.json")"
 printf '%s\n' "$image" | grep -Eq '^localhost/portal-b-day:build-[0-9]+-[0-9a-f]{7,40}$'
 cron_image="$(jq -r '.items[] | select(.kind == "CronJob" and .metadata.name == "portal-b-day-reminder") | .spec.jobTemplate.spec.template.spec.containers[] | select(.name == "reminder") | .image' "$work_dir/manifest.json")"
