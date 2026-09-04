@@ -1,0 +1,112 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: portal-b-day
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: portal-b-day }
+  template:
+    metadata:
+      labels: { app: portal-b-day }
+    spec:
+      containers:
+        - name: web
+          image: localhost/portal-b-day:bootstrap-20260904
+          imagePullPolicy: Never
+          ports:
+            - { name: http, containerPort: 3000 }
+          env:
+            - { name: TZ, value: Asia/Shanghai }
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: portal-b-day-secrets, key: database-url } }
+          readinessProbe:
+            httpGet: { path: /api/health, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/health, port: http }
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: portal-b-day
+spec:
+  selector: { app: portal-b-day }
+  ports:
+    - { name: http, port: 80, targetPort: http }
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: portal-b-day-allowlist
+spec:
+  ipAllowList:
+    sourceRange:
+      - 202.8.9.242/32
+      - 10.0.0.0/8
+      - 172.16.0.0/12
+      - 192.168.0.0/16
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: portal-b-day
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.middlewares: default-portal-b-day-allowlist@kubernetescrd
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - bday.tt829.cn
+      secretName: portal-b-day-tls
+  rules:
+    - host: bday.tt829.cn
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: portal-b-day
+                port:
+                  number: 80
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: portal-b-day-reminder
+spec:
+  schedule: "0 9 * * *"
+  timeZone: Asia/Shanghai
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 86400
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: reminder
+              image: localhost/portal-b-day:bootstrap-20260904
+              imagePullPolicy: Never
+              command: ["bun", "run", "reminder:dispatch"]
+              env:
+                - { name: TZ, value: Asia/Shanghai }
+                - name: DATABASE_URL
+                  valueFrom: { secretKeyRef: { name: portal-b-day-secrets, key: database-url } }
+                - name: WECOM_WEBHOOK_URL
+                  valueFrom: { secretKeyRef: { name: portal-b-day-secrets, key: wecom-webhook-url, optional: true } }
+              resources:
+                requests: { cpu: 25m, memory: 96Mi }
+                limits: { cpu: 300m, memory: 256Mi }

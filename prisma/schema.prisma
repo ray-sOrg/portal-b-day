@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["bday"]
+}
+
+enum CalendarType {
+  SOLAR
+  LUNAR
+
+  @@schema("bday")
+}
+
+enum ChannelKind {
+  WECOM_BOT
+  EMAIL
+
+  @@schema("bday")
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+
+  @@schema("bday")
+}
+
+model Person {
+  id          BigInt       @id @default(autoincrement())
+  name        String       @db.VarChar(80)
+  relation    String?      @db.VarChar(40)
+  calendar    CalendarType @default(SOLAR)
+  birthYear   Int?         @map("birth_year") @db.SmallInt
+  birthMonth  Int          @map("birth_month") @db.SmallInt
+  birthDay    Int          @map("birth_day") @db.SmallInt
+  isLeapMonth Boolean      @default(false) @map("is_leap_month")
+  note        String?
+  enabled     Boolean      @default(true)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  rules       ReminderRule[]
+  deliveries NotificationDelivery[]
+
+  @@index([enabled])
+  @@map("person")
+  @@schema("bday")
+}
+
+model ReminderRule {
+  id         BigInt   @id @default(autoincrement())
+  personId   BigInt?  @map("person_id")
+  daysBefore Int      @map("days_before") @db.SmallInt
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  person     Person?  @relation(fields: [personId], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
+
+  @@index([personId])
+  @@index([enabled, daysBefore])
+  @@map("reminder_rule")
+  @@schema("bday")
+}
+
+model NotificationChannel {
+  id          BigInt      @id @default(autoincrement())
+  name        String      @db.VarChar(80)
+  kind        ChannelKind
+  destination String?     @db.VarChar(320)
+  secretRef   String?     @map("secret_ref") @db.VarChar(120)
+  enabled     Boolean     @default(true)
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deliveries NotificationDelivery[]
+
+  @@index([enabled])
+  @@map("notification_channel")
+  @@schema("bday")
+}
+
+model NotificationDelivery {
+  id           BigInt         @id @default(autoincrement())
+  personId     BigInt         @map("person_id")
+  ruleId       BigInt         @map("rule_id")
+  channelId    BigInt         @map("channel_id")
+  birthdayOn   DateTime       @map("birthday_on") @db.Date
+  scheduledFor DateTime       @map("scheduled_for") @db.Date
+  daysBefore   Int            @map("days_before") @db.SmallInt
+  status       DeliveryStatus @default(PENDING)
+  message      String
+  error        String?
+  sentAt       DateTime?      @map("sent_at") @db.Timestamptz(3)
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  person       Person         @relation(fields: [personId], references: [id], onDelete: Restrict)
+  rule         ReminderRule   @relation(fields: [ruleId], references: [id], onDelete: Restrict)
+  channel      NotificationChannel @relation(fields: [channelId], references: [id], onDelete: Restrict)
+
+  @@unique([personId, ruleId, channelId, birthdayOn])
+  @@index([scheduledFor, status])
+  @@index([personId])
+  @@index([ruleId])
+  @@index([channelId])
+  @@map("notification_delivery")
+  @@schema("bday")
+}
