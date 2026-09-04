@@ -42,6 +42,10 @@ body::before {
 
 main { min-width: 0; overflow: hidden; }
 .topbar { max-width: 1240px; margin: auto; padding: 34px 52px 26px; display: flex; justify-content: space-between; align-items: center; }
+.topbar-actions { display: flex; align-items: center; gap: 12px; }
+.signed-in-user { color: var(--ink-soft); font-size: 13px; }
+.logout-link { color: var(--ink-soft); font-size: 13px; text-decoration: none; }
+.logout-link:hover { color: var(--vermilion); }
 .eyebrow { color: var(--red); font-size: 10px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; }
 .topbar h1 { margin: 7px 0 0; font: 21px var(--serif); letter-spacing: .03em; }
 .primary-button, .secondary-button { border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 0 18px; transition: .2s ease; }

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { channelSchema, personSchema, ruleSchema } from "@/lib/validation";
+import { requireUser } from "@/lib/auth";
 
 export type ActionState = { error?: string };
 
@@ -12,6 +13,7 @@ function firstError(error: { issues: { message: string }[] }) {
 }
 
 export async function savePerson(_: ActionState, formData: FormData): Promise<ActionState> {
+  await requireUser();
   const parsed = personSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: firstError(parsed.error) };
 
@@ -26,6 +28,7 @@ export async function savePerson(_: ActionState, formData: FormData): Promise<Ac
 }
 
 export async function deletePerson(formData: FormData) {
+  await requireUser();
   const id = String(formData.get("id"));
   if (!/^\d+$/.test(id)) return;
   await db.person.delete({ where: { id: BigInt(id) } });
@@ -33,6 +36,7 @@ export async function deletePerson(formData: FormData) {
 }
 
 export async function togglePerson(formData: FormData) {
+  await requireUser();
   const id = String(formData.get("id"));
   const enabled = formData.get("enabled") === "true";
   if (!/^\d+$/.test(id)) return;
@@ -41,6 +45,7 @@ export async function togglePerson(formData: FormData) {
 }
 
 export async function addRule(_: ActionState, formData: FormData): Promise<ActionState> {
+  await requireUser();
   const parsed = ruleSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: firstError(parsed.error) };
   try {
@@ -53,12 +58,14 @@ export async function addRule(_: ActionState, formData: FormData): Promise<Actio
 }
 
 export async function deleteRule(formData: FormData) {
+  await requireUser();
   const id = String(formData.get("id"));
   if (/^\d+$/.test(id)) await db.reminderRule.delete({ where: { id: BigInt(id) } });
   revalidatePath("/");
 }
 
 export async function addChannel(_: ActionState, formData: FormData): Promise<ActionState> {
+  await requireUser();
   const parsed = channelSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: firstError(parsed.error) };
   await db.notificationChannel.create({ data: parsed.data });
@@ -67,6 +74,7 @@ export async function addChannel(_: ActionState, formData: FormData): Promise<Ac
 }
 
 export async function toggleChannel(formData: FormData) {
+  await requireUser();
   const id = String(formData.get("id"));
   const enabled = formData.get("enabled") === "true";
   if (/^\d+$/.test(id)) await db.notificationChannel.update({ where: { id: BigInt(id) }, data: { enabled } });

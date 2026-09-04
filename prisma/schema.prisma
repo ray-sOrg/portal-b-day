@@ -34,21 +34,21 @@ enum DeliveryStatus {
 }
 
 model Person {
-  id          BigInt       @id @default(autoincrement())
-  name        String       @db.VarChar(80)
-  relation    String?      @db.VarChar(40)
-  calendar    CalendarType @default(SOLAR)
-  birthYear   Int?         @map("birth_year") @db.SmallInt
-  birthMonth  Int          @map("birth_month") @db.SmallInt
-  birthDay    Int          @map("birth_day") @db.SmallInt
-  isLeapMonth Boolean      @default(false) @map("is_leap_month")
-  solarBirthDate String?   @map("solar_birth_date") @db.VarChar(10)
-  note        String?
-  enabled     Boolean      @default(true)
-  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
-  rules       ReminderRule[]
-  deliveries NotificationDelivery[]
+  id             BigInt                 @id @default(autoincrement())
+  name           String                 @db.VarChar(80)
+  relation       String?                @db.VarChar(40)
+  calendar       CalendarType           @default(SOLAR)
+  birthYear      Int?                   @map("birth_year") @db.SmallInt
+  birthMonth     Int                    @map("birth_month") @db.SmallInt
+  birthDay       Int                    @map("birth_day") @db.SmallInt
+  isLeapMonth    Boolean                @default(false) @map("is_leap_month")
+  solarBirthDate String?                @map("solar_birth_date") @db.VarChar(10)
+  note           String?
+  enabled        Boolean                @default(true)
+  createdAt      DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  rules          ReminderRule[]
+  deliveries     NotificationDelivery[]
 
   @@index([enabled])
   @@map("person")
@@ -56,13 +56,13 @@ model Person {
 }
 
 model ReminderRule {
-  id         BigInt   @id @default(autoincrement())
-  personId   BigInt?  @map("person_id")
-  daysBefore Int      @map("days_before") @db.SmallInt
-  enabled    Boolean  @default(true)
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
-  person     Person?  @relation(fields: [personId], references: [id], onDelete: Cascade)
+  id         BigInt                 @id @default(autoincrement())
+  personId   BigInt?                @map("person_id")
+  daysBefore Int                    @map("days_before") @db.SmallInt
+  enabled    Boolean                @default(true)
+  createdAt  DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  person     Person?                @relation(fields: [personId], references: [id], onDelete: Cascade)
   deliveries NotificationDelivery[]
 
   @@index([personId])
@@ -72,15 +72,15 @@ model ReminderRule {
 }
 
 model NotificationChannel {
-  id          BigInt      @id @default(autoincrement())
-  name        String      @db.VarChar(80)
+  id          BigInt                 @id @default(autoincrement())
+  name        String                 @db.VarChar(80)
   kind        ChannelKind
-  destination String?     @db.VarChar(320)
-  secretRef   String?     @map("secret_ref") @db.VarChar(120)
-  enabled     Boolean     @default(true)
-  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
-  deliveries NotificationDelivery[]
+  destination String?                @db.VarChar(320)
+  secretRef   String?                @map("secret_ref") @db.VarChar(120)
+  enabled     Boolean                @default(true)
+  createdAt   DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deliveries  NotificationDelivery[]
 
   @@index([enabled])
   @@map("notification_channel")
@@ -88,20 +88,20 @@ model NotificationChannel {
 }
 
 model NotificationDelivery {
-  id           BigInt         @id @default(autoincrement())
-  personId     BigInt         @map("person_id")
-  ruleId       BigInt         @map("rule_id")
-  channelId    BigInt         @map("channel_id")
-  birthdayOn   DateTime       @map("birthday_on") @db.Date
-  scheduledFor DateTime       @map("scheduled_for") @db.Date
-  daysBefore   Int            @map("days_before") @db.SmallInt
-  status       DeliveryStatus @default(PENDING)
+  id           BigInt              @id @default(autoincrement())
+  personId     BigInt              @map("person_id")
+  ruleId       BigInt              @map("rule_id")
+  channelId    BigInt              @map("channel_id")
+  birthdayOn   DateTime            @map("birthday_on") @db.Date
+  scheduledFor DateTime            @map("scheduled_for") @db.Date
+  daysBefore   Int                 @map("days_before") @db.SmallInt
+  status       DeliveryStatus      @default(PENDING)
   message      String
   error        String?
-  sentAt       DateTime?      @map("sent_at") @db.Timestamptz(3)
-  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
-  person       Person         @relation(fields: [personId], references: [id], onDelete: Restrict)
-  rule         ReminderRule   @relation(fields: [ruleId], references: [id], onDelete: Restrict)
+  sentAt       DateTime?           @map("sent_at") @db.Timestamptz(3)
+  createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  person       Person              @relation(fields: [personId], references: [id], onDelete: Restrict)
+  rule         ReminderRule        @relation(fields: [ruleId], references: [id], onDelete: Restrict)
   channel      NotificationChannel @relation(fields: [channelId], references: [id], onDelete: Restrict)
 
   @@unique([personId, ruleId, channelId, birthdayOn])
@@ -110,5 +110,31 @@ model NotificationDelivery {
   @@index([ruleId])
   @@index([channelId])
   @@map("notification_delivery")
+  @@schema("bday")
+}
+
+model AuthAttempt {
+  stateHash    String   @id @map("state_hash") @db.Char(64)
+  codeVerifier String   @map("code_verifier") @db.VarChar(128)
+  nonce        String   @db.VarChar(128)
+  returnTo     String   @default("/") @map("return_to") @db.VarChar(500)
+  expiresAt    DateTime @map("expires_at") @db.Timestamptz(3)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([expiresAt])
+  @@map("auth_attempt")
+  @@schema("bday")
+}
+
+model AuthSession {
+  tokenHash String   @id @map("token_hash") @db.Char(64)
+  subject   String   @db.VarChar(255)
+  username  String   @db.VarChar(255)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([subject])
+  @@index([expiresAt])
+  @@map("auth_session")
   @@schema("bday")
 }

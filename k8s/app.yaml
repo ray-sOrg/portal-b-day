@@ -18,6 +18,13 @@ spec:
             - { name: http, containerPort: 3000 }
           env:
             - { name: TZ, value: Asia/Shanghai }
+            - { name: APP_URL, value: "https://bday.tt829.cn" }
+            - name: OIDC_ISSUER
+              valueFrom: { secretKeyRef: { name: portal-b-day-oidc, key: issuer } }
+            - name: OIDC_CLIENT_ID
+              valueFrom: { secretKeyRef: { name: portal-b-day-oidc, key: client-id } }
+            - name: OIDC_CLIENT_SECRET
+              valueFrom: { secretKeyRef: { name: portal-b-day-oidc, key: client-secret } }
             - name: DATABASE_URL
               valueFrom: { secretKeyRef: { name: portal-b-day-secrets, key: database-url } }
           readinessProbe:

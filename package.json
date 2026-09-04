@@ -21,6 +21,7 @@
     "lunar-javascript": "1.7.7",
     "next": "16.2.6",
     "nodemailer": "7.0.6",
+    "openid-client": "6.8.7",
     "react": "19.2.6",
     "react-day-picker": "9",
     "react-dom": "19.2.6",

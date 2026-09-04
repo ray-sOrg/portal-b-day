@@ -8,6 +8,7 @@ import { StatusPill } from "@/components/status-pill";
 import { deletePerson, deleteRule, toggleChannel, togglePerson } from "@/app/actions";
 import { birthdayLabel, sortUpcoming } from "@/lib/birthday";
 import { getDashboardData } from "@/lib/data";
+import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ function initials(name: string) {
 }
 
 export default async function Home() {
+  const user = await requireUser();
   const data = await getDashboardData();
   const upcoming = sortUpcoming(data.people.filter((person) => person.enabled));
   const spotlight = upcoming[0];
@@ -54,7 +56,11 @@ export default async function Home() {
             <span className="eyebrow">{format(now, "yyyy · MM · dd · EEEE", { locale: zhCN })}</span>
             <h1>早上好，今天也别忘了想念。</h1>
           </div>
-          <PersonForm />
+          <div className="topbar-actions">
+            <span className="signed-in-user">{user.username}</span>
+            <a className="logout-link" href="/api/auth/logout">退出</a>
+            <PersonForm />
+          </div>
         </header>
 
         <section className="hero" id="today">
