@@ -22,16 +22,19 @@
     "next": "16.2.6",
     "nodemailer": "7.0.6",
     "react": "19.2.6",
+    "react-day-picker": "9",
     "react-dom": "19.2.6",
     "zod": "4.1.11"
   },
   "devDependencies": {
+    "@testing-library/react": "16.3.0",
     "@types/node": "24.10.2",
     "@types/nodemailer": "7.0.1",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
     "eslint": "9.39.2",
     "eslint-config-next": "16.2.6",
+    "jsdom": "26.1.0",
     "prisma": "6.19.0",
     "typescript": "5.9.3",
     "vitest": "4.0.15"

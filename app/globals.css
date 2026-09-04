@@ -180,6 +180,33 @@ footer code { font-size: 10px; }
 .field { display: grid; gap: 7px; }
 .field > span, .date-fields > span { color: #6e655c; font-size: 11px; }
 .field-wide { grid-column: 1 / -1; }
+.birth-date-field > label { color: #6e655c; font-size: 11px; }
+.birth-date-entry { display: flex; align-items: center; border: 1px solid var(--line); background: rgba(255,255,255,.55); border-radius: 5px; overflow: hidden; }
+.birth-date-entry:focus-within { border-color: var(--green); box-shadow: 0 0 0 3px rgba(62,98,86,.08); }
+.birth-date-entry > input:not([type="hidden"]) { min-width: 0; flex: 1; height: 46px; border: 0; background: transparent; font-size: 16px; font-variant-numeric: tabular-nums; box-shadow: none; }
+.date-clear, .date-calendar-trigger { flex: none; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; border: 0; cursor: pointer; background: transparent; color: var(--green); }
+.date-clear { width: 36px; color: var(--muted); }
+.date-calendar-trigger { gap: 6px; padding: 0 13px; border-left: 1px solid var(--line); background: rgba(62,98,86,.05); font-size: 12px; }
+.date-calendar-trigger:hover, .date-clear:hover { background: var(--paper-deep); }
+.birth-date-field button:focus-visible { outline: 2px solid var(--green); outline-offset: -3px; }
+.birth-date-hint { color: var(--muted); font-size: 11px; line-height: 1.7; }
+.birth-date-hint.date-error { color: var(--red-dark); }
+.birth-date-calendar { min-width: 0; padding: 14px 10px 10px; border: 1px solid var(--line); border-radius: 5px 18px 5px 18px; background: var(--paper); }
+.birth-calendar-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 0 4px 12px; color: var(--muted); font-size: 11px; }
+.birth-date-calendar .rdp-root { --rdp-accent-color: var(--green); --rdp-accent-background-color: #e5ebe4; --rdp-day-width: 40px; --rdp-day-height: 40px; --rdp-day_button-width: 38px; --rdp-day_button-height: 38px; margin: 0 auto; width: fit-content; max-width: 100%; }
+.birth-date-calendar .rdp-months { max-width: 100%; }
+.birth-date-calendar .rdp-dropdowns { gap: 8px; font-size: 15px; }
+.birth-date-calendar .rdp-dropdown_root { border-bottom: 1px solid var(--line); }
+.birth-date-calendar select.rdp-dropdown { padding: 0; height: 100%; cursor: pointer; }
+.birth-date-calendar .rdp-weekday { color: var(--muted); font-size: 11px; font-weight: 400; }
+.birth-date-calendar .rdp-day_button { font-size: 13px; }
+.birth-date-calendar .rdp-selected .rdp-day_button { color: var(--cream); background: var(--green); border-color: var(--green); font-weight: 600; }
+@media (max-width: 380px) {
+  .date-calendar-trigger { padding: 0 10px; }
+  .date-calendar-trigger > span { display: none; }
+  .birth-date-calendar { padding-inline: 3px; }
+  .birth-date-calendar .rdp-root { --rdp-day-width: 33px; --rdp-day-height: 38px; --rdp-day_button-width: 32px; --rdp-day_button-height: 36px; }
+}
 .date-fields > div { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .date-fields label { position: relative; }
 .date-fields small { position: absolute; right: 11px; top: 13px; color: var(--muted); }

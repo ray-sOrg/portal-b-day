@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useRef, useState } from "react";
-import { dualBirthdayLabel } from "@/lib/birth-date";
+import { BirthDateInput } from "@/components/birth-date-input";
 import { Plus, X } from "lucide-react";
 import { savePerson, type ActionState } from "@/app/actions";
 import type { PersonView } from "@/lib/types";
@@ -14,8 +14,6 @@ export function PersonForm({ person, trigger = "button" }: { person?: PersonView
   const [calendar, setCalendar] = useState(person?.calendar ?? "BOTH");
 
   const [solarBirthDate, setSolarBirthDate] = useState(person?.solarBirthDate ?? "");
-  let preview = "";
-  try { if (solarBirthDate) preview = dualBirthdayLabel(solarBirthDate); } catch { preview = "请输入有效的完整日期"; }
 
   return (
     <>
@@ -54,12 +52,8 @@ export function PersonForm({ person, trigger = "button" }: { person?: PersonView
                 <option value="LUNAR">农历</option>
               </select>
             </label>
-            <label className="field field-wide">
-              <span>公历出生日期（填写后自动记住两种生日）</span>
-              <input type="date" name="solarBirthDate" min="1900-01-01" max="2100-12-31" required={calendar === "BOTH"} value={solarBirthDate} onChange={(event) => setSolarBirthDate(event.target.value)} />
-              <small aria-live="polite">{preview || "双历提醒需要完整公历日期；只知道月日时，请选择单一历法手动记录。"}</small>
-            </label>
-            {solarBirthDate ? <>
+            <BirthDateInput value={solarBirthDate} onChange={setSolarBirthDate} required={calendar === "BOTH"} />
+            {solarBirthDate || calendar === "BOTH" ? <>
               <input type="hidden" name="birthYear" value="" />
               <input type="hidden" name="birthMonth" value="1" />
               <input type="hidden" name="birthDay" value="1" />
