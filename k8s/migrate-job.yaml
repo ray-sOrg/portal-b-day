@@ -10,9 +10,16 @@ spec:
       restartPolicy: Never
       containers:
         - name: migrate
-          image: localhost/portal-b-day:bootstrap-20260904
+          image: localhost/portal-b-day:dual-20260904
           imagePullPolicy: Never
-          command: ["bun", "x", "prisma", "migrate", "deploy"]
+          command: ["sh", "-ec"]
+          args:
+            - |
+              cp -R /app/prisma /tmp/prisma
+              if [ -d /tmp/prisma/migrations/20260904040000_wecom_app ]; then
+                rmdir /tmp/prisma/migrations/20260904040000_wecom_app
+              fi
+              bun x prisma migrate deploy --schema /tmp/prisma/schema.prisma
           env:
             - name: DATABASE_URL
               valueFrom:

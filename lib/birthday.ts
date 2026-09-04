@@ -1,5 +1,6 @@
 import { differenceInCalendarDays, startOfDay } from "date-fns";
 import { Lunar } from "lunar-javascript";
+import { convertBirthDate, dualBirthdayLabel } from "./birth-date";
 import type { PersonView, UpcomingBirthday } from "@/lib/types";
 
 function safeSolarDate(year: number, month: number, day: number) {
@@ -21,7 +22,11 @@ function lunarDateForYear(person: PersonView, lunarYear: number) {
   }
 }
 
-export function nextBirthdayFor(person: PersonView, from = new Date()) {
+export function nextBirthdayFor(person: PersonView, from = new Date()): Date {
+  if (person.calendar === "BOTH") {
+    const dates = birthdayVariants(person).map((variant) => nextBirthdayFor(variant, from));
+    return new Date(Math.min(...dates.map((date) => date.getTime())));
+  }
   const today = startOfDay(from);
   const year = today.getFullYear();
 
@@ -30,9 +35,22 @@ export function nextBirthdayFor(person: PersonView, from = new Date()) {
     return thisYear >= today ? thisYear : safeSolarDate(year + 1, person.birthMonth, person.birthDay);
   }
 
-  const thisYear = lunarDateForYear(person, year);
-  if (thisYear && thisYear >= today) return thisYear;
-  return lunarDateForYear(person, year + 1) ?? safeSolarDate(year + 1, person.birthMonth, person.birthDay);
+  // Lunar year can lag Gregorian year in January/February.
+  for (let lunarYear = year - 1; lunarYear <= year + 20; lunarYear++) {
+    const occurrence = lunarDateForYear(person, lunarYear);
+    if (occurrence && occurrence >= today) return occurrence;
+  }
+  throw new Error("未找到有效的农历生日，请检查日期和闰月设置");
+}
+
+export function birthdayVariants(person: PersonView): PersonView[] {
+  if (person.calendar !== "BOTH") return [person];
+  if (!person.solarBirthDate) throw new Error("双历提醒缺少公历出生日期");
+  const { solar, lunar } = convertBirthDate(person.solarBirthDate);
+  return [
+    { ...person, calendar: "SOLAR", birthYear: solar.year, birthMonth: solar.month, birthDay: solar.day, isLeapMonth: false },
+    { ...person, calendar: "LUNAR", birthYear: lunar.year, birthMonth: lunar.month, birthDay: lunar.day, isLeapMonth: lunar.isLeapMonth },
+  ];
 }
 
 export function withUpcoming(person: PersonView, from = new Date()): UpcomingBirthday {
@@ -50,6 +68,7 @@ export function sortUpcoming(people: PersonView[], from = new Date()) {
 }
 
 export function birthdayLabel(person: PersonView) {
+  if (person.solarBirthDate) return dualBirthdayLabel(person.solarBirthDate);
   const calendar = person.calendar === "LUNAR" ? "农历" : "公历";
   const leap = person.isLeapMonth ? "闰" : "";
   return `${calendar} ${leap}${person.birthMonth}月${person.birthDay}日`;

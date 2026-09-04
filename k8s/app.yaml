@@ -12,7 +12,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: localhost/portal-b-day:bootstrap-20260904
+          image: __IMAGE_NAME__:__IMAGE_TAG__
           imagePullPolicy: Never
           ports:
             - { name: http, containerPort: 3000 }
@@ -98,9 +98,12 @@ spec:
           restartPolicy: Never
           containers:
             - name: reminder
-              image: localhost/portal-b-day:bootstrap-20260904
+              image: __IMAGE_NAME__:__IMAGE_TAG__
               imagePullPolicy: Never
               command: ["bun", "run", "reminder:dispatch"]
+              envFrom:
+                - secretRef:
+                    name: portal-b-day-wecom
               env:
                 - { name: TZ, value: Asia/Shanghai }
                 - name: DATABASE_URL

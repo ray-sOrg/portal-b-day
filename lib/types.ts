@@ -1,4 +1,4 @@
-export type CalendarKind = "SOLAR" | "LUNAR";
+export type CalendarKind = "SOLAR" | "LUNAR" | "BOTH";
 
 export type PersonView = {
   id: string;
@@ -9,6 +9,7 @@ export type PersonView = {
   birthMonth: number;
   birthDay: number;
   isLeapMonth: boolean;
+  solarBirthDate?: string | null;
   note: string | null;
   enabled: boolean;
 };

@@ -1,0 +1,253 @@
+#!/bin/sh
+
+set -eu
+
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+state_dir="${DEPLOY_STATE_DIR:-/var/lib/k3s-http-deployer}"
+jobs_dir="$state_dir/jobs"
+
+write_status() {
+  status_file="$1"
+  deployment_status="$2"
+  message="$3"
+  exit_code="${4:-}"
+  python3 - "$status_file" "$deployment_status" "$message" "$exit_code" <<'PY'
+import json
+import os
+import sys
+import tempfile
+from datetime import datetime, timezone
+
+path, status, message, exit_code = sys.argv[1:]
+with open(path, encoding="utf-8") as status_file:
+    value = json.load(status_file)
+value["status"] = status
+value["message"] = message
+value["updated_at"] = datetime.now(timezone.utc).isoformat()
+if exit_code:
+    value["exit_code"] = int(exit_code)
+fd, temporary_path = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".status.")
+try:
+    with os.fdopen(fd, "w", encoding="utf-8") as temporary_file:
+        json.dump(value, temporary_file, ensure_ascii=True, separators=(",", ":"))
+        temporary_file.write("\n")
+        temporary_file.flush()
+        os.fsync(temporary_file.fileno())
+    os.chmod(temporary_path, 0o640)
+    os.replace(temporary_path, path)
+finally:
+    try:
+        os.unlink(temporary_path)
+    except FileNotFoundError:
+        pass
+PY
+}
+
+project_settings() {
+  case "$1" in
+    portal-b-day)
+      deploy_user="deploy-bday"
+      deployment="portal-b-day"
+      health_host="bday.tt829.cn"
+      health_path="/api/health"
+      ;;
+    pwa-home)
+      deploy_user="deploy"
+      deployment="pwa-home-deployment"
+      health_host="home.tt829.cn"
+      health_path="/"
+      ;;
+    portal-base-web)
+      deploy_user="deploy-baseweb"
+      deployment="portal-base-web-deployment"
+      health_host="ray321.cn"
+      health_path="/"
+      ;;
+    portal-chuan-dai-h5)
+      deploy_user="deploy-chuandai"
+      deployment="portal-chuan-dai-h5-deployment"
+      health_host="chuan-dai.tt829.cn"
+      health_path="/"
+      ;;
+    portal-console-web)
+      deploy_user="deploy-console"
+      deployment="portal-console-web-deployment"
+      health_host="console.tt829.cn"
+      health_path="/"
+      ;;
+    portal-weight-management)
+      deploy_user="deploy-weight"
+      deployment="portal-weight-management-deployment"
+      health_host="weight.tt829.cn"
+      health_path="/"
+      ;;
+    server-console)
+      deploy_user="deploy-api"
+      deployment="server-console-deployment"
+      health_host="api.tt829.cn"
+      health_path="/health"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+extract_payload() {
+  payload="$1"
+  destination="$2"
+  python3 - "$payload" "$destination" <<'PY'
+import os
+import shutil
+import sys
+import tarfile
+
+payload, destination = sys.argv[1:]
+expected = {
+    "deployment-source.tar.gz",
+    "deployment-source.tar.gz.sha256",
+    "deployment-image-tag",
+    "deployment.yaml",
+}
+with tarfile.open(payload, mode="r:*") as archive:
+    members = archive.getmembers()
+    names = {member.name for member in members}
+    if names != expected:
+        raise SystemExit(f"invalid payload entries: {sorted(names)}")
+    for member in members:
+        if not member.isfile() or member.size > 105 * 1024 * 1024:
+            raise SystemExit(f"invalid payload member: {member.name}")
+        source = archive.extractfile(member)
+        if source is None:
+            raise SystemExit(f"cannot read payload member: {member.name}")
+        target = os.path.join(destination, member.name)
+        with source, open(target, "xb") as output:
+            shutil.copyfileobj(source, output)
+PY
+}
+
+deploy_job() {
+  job_dir="$1"
+  status_file="$job_dir/status.json"
+  payload="$job_dir/payload.tar"
+  project="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["project"])' "$status_file")"
+  deploy_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["deploy_id"])' "$status_file")"
+  log_file="$job_dir/deployment.log"
+
+  if ! project_settings "$project"; then
+    write_status "$status_file" failed "Project is not in the server allowlist" 2
+    return
+  fi
+
+  chgrp deploy-http "$job_dir"
+  chmod 2750 "$job_dir"
+  : >"$log_file"
+  chmod 640 "$log_file"
+  chgrp deploy-http "$log_file" "$status_file"
+  write_status "$status_file" running "Building and deploying on the k3s node"
+
+  work_dir="$(mktemp -d /var/tmp/k3s-http-deploy.XXXXXX)"
+  deploy_home="$(getent passwd "$deploy_user" | cut -d: -f6)"
+  kubeconfig="$deploy_home/.kube/config"
+  applied=0
+  exit_code=0
+
+  perform_deployment() {
+    echo "Deployment $deploy_id for $project started at $(date --iso-8601=seconds)"
+    extract_payload "$payload" "$work_dir" || return $?
+
+    install -o "$deploy_user" -g "$deploy_user" -m 600 \
+      "$work_dir/deployment-source.tar.gz" \
+      "$deploy_home/deployment-source.tar.gz" || return $?
+    install -o "$deploy_user" -g "$deploy_user" -m 600 \
+      "$work_dir/deployment-source.tar.gz.sha256" \
+      "$deploy_home/deployment-source.tar.gz.sha256" || return $?
+    install -o "$deploy_user" -g "$deploy_user" -m 600 \
+      "$work_dir/deployment-image-tag" \
+      "$deploy_home/deployment-image-tag" || return $?
+    install -o "$deploy_user" -g "$deploy_user" -m 600 \
+      "$work_dir/deployment.yaml" \
+      "$deploy_home/deployment.yaml" || return $?
+
+    runuser -u "$deploy_user" -- \
+      sudo -n /usr/local/sbin/k3s-build-deployment-image || return $?
+    if [ "$project" = "portal-b-day" ]; then
+      /usr/local/sbin/k3s-deploy-bday || return $?
+      return 0
+    fi
+    runuser -u "$deploy_user" -- \
+      env KUBECONFIG="$kubeconfig" \
+      kubectl apply -f "$deploy_home/deployment.yaml" || return $?
+    applied=1
+    runuser -u "$deploy_user" -- \
+      env KUBECONFIG="$kubeconfig" kubectl rollout status \
+      "deployment/$deployment" --timeout=180s || return $?
+    curl --fail --silent --show-error \
+      --retry 5 --retry-delay 3 --max-time 15 \
+      -H "Host: $health_host" \
+      "http://127.0.0.1$health_path" >/dev/null || return $?
+    echo "Deployment and route check succeeded at $(date --iso-8601=seconds)"
+  }
+
+  set +e
+  perform_deployment >>"$log_file" 2>&1
+  exit_code=$?
+  set -e
+
+  if [ "$exit_code" -ne 0 ]; then
+    if [ "$applied" -eq 1 ]; then
+      {
+        echo "Deployment check failed; rolling back."
+        runuser -u "$deploy_user" -- \
+          env KUBECONFIG="$kubeconfig" kubectl rollout undo "deployment/$deployment"
+        runuser -u "$deploy_user" -- \
+          env KUBECONFIG="$kubeconfig" kubectl rollout status \
+          "deployment/$deployment" --timeout=180s
+      } >>"$log_file" 2>&1 || true
+    fi
+    write_status "$status_file" failed "Server-side deployment failed" "$exit_code"
+  else
+    write_status "$status_file" succeeded "Deployment and health check succeeded" 0
+  fi
+
+  rm -rf "$work_dir"
+  rm -f \
+    "$deploy_home/deployment-source.tar.gz" \
+    "$deploy_home/deployment-source.tar.gz.sha256" \
+    "$deploy_home/deployment-image-tag" \
+    "$deploy_home/deployment.yaml"
+  rm -f "$payload"
+}
+
+process_queue() {
+  # Rescan after each batch: uploads can arrive while a build is running.
+  # A systemd timer also covers arrivals between the final scan and exit.
+  while :; do
+    queued_jobs="$(python3 - "$jobs_dir" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+for status_file in sorted(Path(sys.argv[1]).glob('*/*/status.json')):
+    with status_file.open(encoding='utf-8') as stream:
+        status = json.load(stream)
+    if status.get('status') == 'queued':
+        print(status_file.parent)
+PY
+    )" || return $?
+    [ -n "$queued_jobs" ] || return 0
+    printf '%s\n' "$queued_jobs" |
+    while IFS= read -r job_dir; do
+      deploy_job "$job_dir"
+    done
+  done
+}
+
+# Main entrypoint: keep the lock across all batches.
+mkdir -p "$jobs_dir"
+exec 9>"$state_dir/worker.lock"
+flock 9
+process_queue
+

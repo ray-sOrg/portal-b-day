@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { format, startOfDay } from "date-fns";
 import { db } from "@/lib/db";
-import { withUpcoming } from "@/lib/birthday";
+import { birthdayVariants, withUpcoming } from "@/lib/birthday";
 import { sendNotification } from "@/lib/notifications";
 
 export type DispatchSummary = { matched: number; sent: number; failed: number; skipped: number };
@@ -22,7 +22,11 @@ export async function dispatchReminders(today = new Date()): Promise<DispatchSum
   const summary: DispatchSummary = { matched: 0, sent: 0, failed: 0, skipped: 0 };
 
   for (const person of people) {
-    const view = withUpcoming({ ...person, id: person.id.toString() }, today);
+    const variants = birthdayVariants({ ...person, id: person.id.toString() });
+    const occurrences = variants.map((variant) => withUpcoming(variant, today));
+    // Shared date => a single reminder per rule/channel, also protected by DB uniqueness.
+    const uniqueDates = new Map(occurrences.map((view) => [view.nextBirthday.getTime(), view]));
+    for (const view of uniqueDates.values()) {
     const rules = person.rules.length ? person.rules : globalRules;
     const matchingRules = rules.filter((rule) => rule.daysBefore === view.daysUntil);
     if (!matchingRules.length) continue;
@@ -30,7 +34,8 @@ export async function dispatchReminders(today = new Date()): Promise<DispatchSum
     for (const rule of matchingRules) {
       for (const channel of channels) {
         summary.matched += 1;
-        const message = messageFor(person.name, view.nextBirthday, rule.daysBefore);
+        const labels = occurrences.filter((item) => item.nextBirthday.getTime() === view.nextBirthday.getTime()).map((item) => item.calendar === "LUNAR" ? "农历" : "公历");
+        const message = messageFor(`${person.name}（${labels.join(" / ")}）`, view.nextBirthday, rule.daysBefore);
         let deliveryId: bigint;
 
         try {
@@ -64,6 +69,7 @@ export async function dispatchReminders(today = new Date()): Promise<DispatchSum
           summary.failed += 1;
         }
       }
+    }
     }
   }
 

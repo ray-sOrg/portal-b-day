@@ -1,0 +1,20 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: portal-b-day-wecom-check
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: check
+          image: localhost/portal-b-day:wecom-20260904
+          imagePullPolicy: Never
+          envFrom:
+            - secretRef:
+                name: portal-b-day-wecom
+          command: ["bun", "-e"]
+          args:
+            - 'import { getWecomAppToken } from "./lib/wecom-app"; try { await getWecomAppToken(); console.log("WeCom credentials verified; no message sent"); } catch(e) { console.error(e.message); process.exitCode = 1; }'

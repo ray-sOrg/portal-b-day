@@ -1,7 +1,8 @@
 import nodemailer from "nodemailer";
+import { sendWecomApp } from "./wecom-app";
 
 type Channel = {
-  kind: "WECOM_BOT" | "EMAIL";
+  kind: "WECOM_BOT" | "WECOM_APP" | "EMAIL";
   destination: string | null;
   secretRef: string | null;
 };
@@ -41,6 +42,7 @@ async function sendEmail(channel: Channel, message: string) {
 }
 
 export async function sendNotification(channel: Channel, message: string) {
+  if (channel.kind === "WECOM_APP") return sendWecomApp(message, channel.destination ?? undefined);
   if (channel.kind === "WECOM_BOT") return sendWecom(channel, message);
   return sendEmail(channel, message);
 }

@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: portal-b-day-deployer
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: portal-b-day-deployer
+  namespace: default
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["portal-b-day"]
+    verbs: ["get", "watch", "patch", "update"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["list"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["services"]
+    resourceNames: ["portal-b-day"]
+    verbs: ["get", "patch", "update"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    resourceNames: ["portal-b-day"]
+    verbs: ["get", "patch", "update"]
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    resourceNames: ["portal-b-day-reminder"]
+    verbs: ["get", "patch", "update"]
+  - apiGroups: ["traefik.io"]
+    resources: ["middlewares"]
+    resourceNames: ["portal-b-day-allowlist"]
+    verbs: ["get", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: portal-b-day-deployer
+  namespace: default
+subjects:
+  - kind: ServiceAccount
+    name: portal-b-day-deployer
+    namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: portal-b-day-deployer
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: portal-b-day-deployer-token
+  namespace: default
+  annotations:
+    kubernetes.io/service-account.name: portal-b-day-deployer
+type: kubernetes.io/service-account-token
+

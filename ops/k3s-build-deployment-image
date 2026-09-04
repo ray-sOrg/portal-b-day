@@ -1,0 +1,141 @@
+#!/bin/sh
+
+set -eu
+
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+[ "$#" -eq 0 ] || {
+  echo "This command does not accept arguments." >&2
+  exit 2
+}
+
+deploy_user="${SUDO_USER:-}"
+case "$deploy_user" in
+  deploy-bday)
+    project="portal-b-day"
+    ;;
+  deploy)
+    project="pwa-home"
+    ;;
+  deploy-baseweb)
+    project="portal-base-web"
+    ;;
+  deploy-chuandai)
+    project="portal-chuan-dai-h5"
+    ;;
+  deploy-console)
+    project="portal-console-web"
+    ;;
+  deploy-weight)
+    project="portal-weight-management"
+    ;;
+  deploy-api)
+    project="server-console"
+    ;;
+  *)
+    echo "Unauthorized deployment user." >&2
+    exit 1
+    ;;
+esac
+
+deploy_home="$(getent passwd "$deploy_user" | cut -d: -f6)"
+source_archive="$deploy_home/deployment-source.tar.gz"
+checksum_file="$deploy_home/deployment-source.tar.gz.sha256"
+tag_file="$deploy_home/deployment-image-tag"
+
+validate_owned_file() {
+  path="$1"
+  [ -f "$path" ] && [ ! -L "$path" ] || {
+    echo "Missing or invalid deployment input: $path" >&2
+    exit 1
+  }
+  [ "$(stat -c %U "$path")" = "$deploy_user" ] || {
+    echo "Invalid owner for deployment input: $path" >&2
+    exit 1
+  }
+}
+
+validate_owned_file "$source_archive"
+validate_owned_file "$checksum_file"
+validate_owned_file "$tag_file"
+
+[ "$(stat -c %s "$source_archive")" -le 104857600 ] || {
+  echo "Source archive exceeds the 100 MiB limit." >&2
+  exit 1
+}
+
+expected_sha="$(awk 'NR == 1 { print $1 }' "$checksum_file")"
+printf '%s\n' "$expected_sha" | grep -Eq '^[0-9a-f]{64}$' || {
+  echo "Invalid source archive checksum." >&2
+  exit 1
+}
+
+actual_sha="$(sha256sum "$source_archive" | cut -d' ' -f1)"
+[ "$actual_sha" = "$expected_sha" ] || {
+  echo "Source archive checksum mismatch." >&2
+  exit 1
+}
+
+image_tag="$(tr -d '\r\n' < "$tag_file")"
+printf '%s\n' "$image_tag" | grep -Eq '^build-[0-9]+-[0-9a-f]{7,40}$' || {
+  echo "Invalid deployment image tag." >&2
+  exit 1
+}
+image="localhost/$project:$image_tag"
+build_timeout="30m"
+
+if tar -tzf "$source_archive" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
+  echo "Source archive contains an unsafe path." >&2
+  exit 1
+fi
+
+exec 9>/var/lock/k3s-deployment-build.lock
+echo "Waiting for the deployment build lock..."
+flock 9
+
+build_dir="$(mktemp -d /var/tmp/k3s-deployment-build.XXXXXX)"
+cleanup() {
+  rm -rf "$build_dir"
+}
+trap cleanup EXIT HUP INT TERM
+
+tar --no-same-owner --no-same-permissions -xzf "$source_archive" -C "$build_dir"
+[ -f "$build_dir/Dockerfile" ] && [ ! -L "$build_dir/Dockerfile" ] || {
+  echo "Source archive does not contain a regular Dockerfile." >&2
+  exit 1
+}
+
+echo "Building $image on the k3s node..."
+if [ "$project" = "portal-chuan-dai-h5" ]; then
+  DATABASE_URL="$(k3s kubectl get secret supabase-secret-portal-chuan-dai-h5 -n default -o jsonpath='{.data.DATABASE_URL}' | base64 -d)"
+  DIRECT_URL="$(k3s kubectl get secret supabase-secret-portal-chuan-dai-h5 -n default -o jsonpath='{.data.DIRECT_URL}' | base64 -d)"
+  export DATABASE_URL DIRECT_URL
+  timeout --foreground --signal=TERM --kill-after=30s "$build_timeout" \
+    nice -n 10 docker buildx build \
+    --builder k3s-deployment-builder \
+    --load \
+    --progress plain \
+    --build-arg DATABASE_URL \
+    --build-arg DIRECT_URL \
+    --tag "$image" \
+    "$build_dir"
+  unset DATABASE_URL DIRECT_URL
+else
+  timeout --foreground --signal=TERM --kill-after=30s "$build_timeout" \
+    nice -n 10 docker buildx build \
+    --builder k3s-deployment-builder \
+    --load \
+    --progress plain \
+    --tag "$image" \
+    "$build_dir"
+fi
+
+echo "Importing $image into k3s containerd..."
+docker save "$image" | k3s ctr images import --platform linux/amd64 -
+k3s ctr images list -q | grep -Fx "$image" >/dev/null
+
+docker image rm "$image" >/dev/null 2>&1 || true
+rm -f "$source_archive" "$checksum_file" "$tag_file"
+echo "Image ready: $image"
+

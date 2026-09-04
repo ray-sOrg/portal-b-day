@@ -1,0 +1,73 @@
+#!/bin/sh
+# Fixed server-side hook; installed by an administrator, never from a CI archive.
+set -eu
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+[ "$#" -eq 0 ] || exit 2
+deploy_home="$(getent passwd deploy-bday | cut -d: -f6)"
+[ "$deploy_home" = /home/deploy-bday ] || exit 2
+work_dir="$(mktemp -d /var/tmp/bday-release.XXXXXX)"
+kube() { runuser -u deploy-bday -- env KUBECONFIG="$deploy_home/.kube/config" kubectl "$@"; }
+changed=0
+paused=0
+previous_revision="$(kubectl get deployment portal-b-day -o jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/revision}')"
+kubectl get cronjob portal-b-day-reminder -o json | jq '{spec: .spec}' > "$work_dir/previous-cron.json"
+cleanup() {
+  result=$?
+  trap - EXIT
+  if [ "$result" -ne 0 ] && [ "$changed" -eq 1 ]; then
+    echo "Release failed; restoring the previous website revision. Database migrations are not reversed."
+    kube rollout undo deployment/portal-b-day --to-revision="$previous_revision" || true
+    kube rollout status deployment/portal-b-day --timeout=180s || true
+  fi
+  if [ "$result" -ne 0 ] && [ "$paused" -eq 1 ]; then
+    kube patch cronjob portal-b-day-reminder --type=merge -p "$(cat "$work_dir/previous-cron.json")" || true
+  fi
+  rm -rf "$work_dir"
+  exit "$result"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# Parse the manifest without applying it; the restricted deployer performs writes.
+kubectl apply --dry-run=client -f "$deploy_home/deployment.yaml" -o json > "$work_dir/manifest.json"
+image="$(jq -r '.items[] | select(.kind == "Deployment" and .metadata.name == "portal-b-day") | .spec.template.spec.containers[] | select(.name == "web") | .image' "$work_dir/manifest.json")"
+printf '%s\n' "$image" | grep -Eq '^localhost/portal-b-day:build-[0-9]+-[0-9a-f]{7,40}$'
+cron_image="$(jq -r '.items[] | select(.kind == "CronJob" and .metadata.name == "portal-b-day-reminder") | .spec.jobTemplate.spec.template.spec.containers[] | select(.name == "reminder") | .image' "$work_dir/manifest.json")"
+[ "$cron_image" = "$image" ]
+
+paused=1
+kube patch cronjob portal-b-day-reminder --type=merge -p '{"spec":{"suspend":true}}'
+# Existing dispatches must finish before changing the schema.
+for attempt in $(seq 1 60); do
+  active="$(kube get cronjob portal-b-day-reminder -o json | jq '(.status.active // []) | length')"
+  [ "$active" -eq 0 ] && break
+  sleep 5
+done
+[ "$active" -eq 0 ] || { echo "A reminder job is still active" >&2; exit 1; }
+
+job="portal-b-day-migrate-$(date +%s)"
+jq -n --arg name "$job" --arg image "$image" '{
+  apiVersion:"batch/v1", kind:"Job", metadata:{name:$name},
+  spec:{backoffLimit:0,ttlSecondsAfterFinished:86400,activeDeadlineSeconds:240,template:{spec:{restartPolicy:"Never",containers:[{
+    name:"migrate",image:$image,imagePullPolicy:"Never",
+    command:["sh","-ec","cp -R /app/prisma /tmp/prisma; bun x prisma migrate deploy --schema /tmp/prisma/schema.prisma"],
+    env:[{name:"DATABASE_URL",valueFrom:{secretKeyRef:{name:"portal-b-day-secrets",key:"migration-url"}}}],
+    resources:{requests:{cpu:"25m",memory:"96Mi"},limits:{cpu:"500m",memory:"256Mi"}}
+  }]}}}}' | kubectl create -f -
+if ! kubectl wait --for=condition=complete "job/$job" --timeout=240s; then
+  kubectl logs "job/$job" --all-containers=true || true
+  exit 1
+fi
+kubectl logs "job/$job" --all-containers=true
+
+# Keep scheduling paused until the new website has passed its health check.
+changed=1
+jq '(.items[] | select(.kind == "CronJob") | .spec.suspend) = true' "$work_dir/manifest.json" | kube apply -f -
+kube rollout status deployment/portal-b-day --timeout=180s
+curl --fail --silent --show-error --retry 5 --retry-delay 3 --max-time 15 \
+  -H 'Host: bday.tt829.cn' http://127.0.0.1/api/health >/dev/null
+previous_suspend="$(jq -c '.spec.suspend // false' "$work_dir/previous-cron.json")"
+kube patch cronjob portal-b-day-reminder --type=merge -p "{\"spec\":{\"suspend\":$previous_suspend}}"
+echo "B-Day migration, website, reminder image and health check succeeded."

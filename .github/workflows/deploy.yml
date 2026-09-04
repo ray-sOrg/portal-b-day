@@ -1,0 +1,206 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PROJECT_NAME: portal-b-day
+  K8S_DEPLOYMENT_FILE: deployment.yaml
+  HEALTH_CHECK_HOST: bday.tt829.cn
+  HEALTH_CHECK_PATH: /api/health
+  DEPLOY_API_URL: https://home.tt829.cn/__deploy/v1
+
+jobs:
+  deploy:
+    name: Build & Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 50
+
+    steps:
+      - name: Record deployment start
+        run: echo "DEPLOY_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.10
+
+      - name: Check application
+        run: |
+          bun install --frozen-lockfile
+          bun run db:generate
+          bun run test
+          bun x next typegen
+          bun run typecheck
+          bun run lint
+
+      - name: Generate image metadata
+        id: meta
+        run: |
+          IMAGE_NAME="localhost/${{ env.PROJECT_NAME }}"
+          IMAGE_TAG="build-${GITHUB_RUN_NUMBER}-$(git rev-parse --short HEAD)"
+          echo "image=$IMAGE_NAME" >> "$GITHUB_OUTPUT"
+          echo "tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "Image: $IMAGE_NAME:$IMAGE_TAG"
+
+      - name: Package deployment source
+        id: source
+        run: |
+          git archive --format=tar.gz --output "$RUNNER_TEMP/deployment-source.tar.gz" HEAD
+          (
+            cd "$RUNNER_TEMP"
+            sha256sum deployment-source.tar.gz > deployment-source.tar.gz.sha256
+          )
+          printf '%s\n' "${{ steps.meta.outputs.tag }}" > "$RUNNER_TEMP/deployment-image-tag"
+          echo "size=$(du -h "$RUNNER_TEMP/deployment-source.tar.gz" | cut -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare deployment manifest
+        run: |
+          IMAGE="${{ steps.meta.outputs.image }}"
+          TAG="${{ steps.meta.outputs.tag }}"
+          cp k8s/app.yaml deployment.yaml
+          sed -i "s|__IMAGE_NAME__|$IMAGE|g" "${{ env.K8S_DEPLOYMENT_FILE }}"
+          sed -i "s|__IMAGE_TAG__|$TAG|g" "${{ env.K8S_DEPLOYMENT_FILE }}"
+          echo "Deploying: $IMAGE:$TAG"
+
+      - name: Package deployment request
+        run: |
+          tar -C "$RUNNER_TEMP" -cf "$RUNNER_TEMP/deployment-request.tar" \
+            deployment-source.tar.gz \
+            deployment-source.tar.gz.sha256 \
+            deployment-image-tag \
+            -C "$GITHUB_WORKSPACE" \
+            "${{ env.K8S_DEPLOYMENT_FILE }}"
+          sha256sum "$RUNNER_TEMP/deployment-request.tar" \
+            | cut -d' ' -f1 > "$RUNNER_TEMP/deployment-request.sha256"
+
+      - name: Submit deployment over HTTPS
+        env:
+          DEPLOY_HTTP_TOKEN: ${{ secrets.DEPLOY_HTTP_TOKEN }}
+        run: |
+          test -n "$DEPLOY_HTTP_TOKEN"
+          DEPLOY_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          CONTENT_SHA256="$(cat "$RUNNER_TEMP/deployment-request.sha256")"
+          curl --fail-with-body --silent --show-error \
+            --retry 2 --retry-all-errors \
+            --connect-timeout 15 --max-time 180 \
+            --request POST \
+            --header "Authorization: Bearer $DEPLOY_HTTP_TOKEN" \
+            --header "Content-Type: application/x-tar" \
+            --header "X-Deploy-ID: $DEPLOY_ID" \
+            --header "X-Commit-SHA: $GITHUB_SHA" \
+            --header "X-Content-SHA256: $CONTENT_SHA256" \
+            --data-binary "@$RUNNER_TEMP/deployment-request.tar" \
+            "$DEPLOY_API_URL/jobs/$PROJECT_NAME"
+
+      - name: Wait for server-side deployment
+        env:
+          DEPLOY_HTTP_TOKEN: ${{ secrets.DEPLOY_HTTP_TOKEN }}
+        run: |
+          DEPLOY_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          for attempt in $(seq 1 270); do
+            RESPONSE="$(curl --fail-with-body --silent --show-error \
+              --retry 2 --retry-all-errors \
+              --connect-timeout 10 --max-time 30 \
+              --header "Authorization: Bearer $DEPLOY_HTTP_TOKEN" \
+              "$DEPLOY_API_URL/jobs/$PROJECT_NAME/$DEPLOY_ID")"
+            STATUS="$(jq -r '.status' <<<"$RESPONSE")"
+            MESSAGE="$(jq -r '.message // ""' <<<"$RESPONSE")"
+            echo "Server deployment: $STATUS - $MESSAGE"
+            case "$STATUS" in
+              succeeded)
+                exit 0
+                ;;
+              failed)
+                jq -r '.log_tail // "No server log available."' <<<"$RESPONSE" >&2
+                exit 1
+                ;;
+              queued|running)
+                sleep 10
+                ;;
+              *)
+                echo "Unexpected deployment status: $STATUS" >&2
+                exit 1
+                ;;
+            esac
+          done
+          echo "Timed out waiting for the server deployment" >&2
+          exit 1
+
+      - name: Deployment summary
+        if: always()
+        run: |
+          {
+            echo "### Deployment: ${{ job.status }}"
+            echo ""
+            echo "- Image: \`${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}\`"
+            echo "- Source archive: \`${{ steps.source.outputs.size }}\`"
+            echo "- Host: \`${{ env.HEALTH_CHECK_HOST }}\`"
+            echo "- Transport: signed HTTPS (no deployment SSH login)"
+            echo "- Registry: bypassed (built on k3s node)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Notify WeCom
+        if: always()
+        env:
+          WECOM_WEBHOOK_URL: ${{ secrets.WECOM_WEBHOOK_URL }}
+          DEPLOY_STATUS: ${{ job.status }}
+        run: |
+          if [ -z "$WECOM_WEBHOOK_URL" ]; then
+            echo "::error::WECOM_WEBHOOK_URL is not configured; deployment notification cannot be sent"
+            exit 1
+          fi
+
+          ELAPSED=$(( $(date +%s) - ${DEPLOY_STARTED_AT:-$(date +%s)} ))
+          DURATION="$((ELAPSED / 60))m $((ELAPSED % 60))s"
+          COMMIT_SHA="$(git rev-parse HEAD 2>/dev/null || printf '%s' "$GITHUB_SHA")"
+          SHORT_SHA="${COMMIT_SHA:0:7}"
+          COMMIT_SUBJECT="$(git log -1 --pretty=%s 2>/dev/null || printf 'Unavailable')"
+          SERVICE_URL="https://${HEALTH_CHECK_HOST}${HEALTH_CHECK_PATH}"
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          COMMIT_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${COMMIT_SHA}"
+
+          if [ "$DEPLOY_STATUS" = "success" ]; then
+            TITLE="### Deployment succeeded"
+            COLOR="info"
+          else
+            TITLE="### Deployment ${DEPLOY_STATUS}"
+            COLOR="warning"
+          fi
+
+          CONTENT="$(jq -n -r \
+            --arg title "$TITLE" \
+            --arg color "$COLOR" \
+            --arg project "$PROJECT_NAME" \
+            --arg status "$DEPLOY_STATUS" \
+            --arg duration "$DURATION" \
+            --arg subject "$COMMIT_SUBJECT" \
+            --arg short_sha "$SHORT_SHA" \
+            --arg commit_url "$COMMIT_URL" \
+            --arg service_url "$SERVICE_URL" \
+            --arg run_url "$RUN_URL" \
+            '$title + "\n> Project: **" + $project + "**\n> Status: <font color=\"" + $color + "\">" + $status + "</font>\n> Duration: " + $duration + "\n> Commit: [" + $short_sha + "](" + $commit_url + ") " + $subject + "\n> Service: [" + $service_url + "](" + $service_url + ")\n> Details: [GitHub Actions](" + $run_url + ")"')"
+          PAYLOAD="$(jq -n --arg content "$CONTENT" \
+            '{msgtype: "markdown", markdown: {content: $content}}')"
+          RESPONSE="$(curl --fail-with-body --silent --show-error \
+            --retry 2 --retry-all-errors \
+            --header 'Content-Type: application/json' \
+            --data "$PAYLOAD" \
+            "$WECOM_WEBHOOK_URL")"
+          echo "$RESPONSE"
+          test "$(jq -r '.errcode // -1' <<< "$RESPONSE")" = "0"

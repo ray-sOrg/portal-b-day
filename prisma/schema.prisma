@@ -11,12 +11,14 @@ datasource db {
 enum CalendarType {
   SOLAR
   LUNAR
+  BOTH
 
   @@schema("bday")
 }
 
 enum ChannelKind {
   WECOM_BOT
+  WECOM_APP
   EMAIL
 
   @@schema("bday")
@@ -40,6 +42,7 @@ model Person {
   birthMonth  Int          @map("birth_month") @db.SmallInt
   birthDay    Int          @map("birth_day") @db.SmallInt
   isLeapMonth Boolean      @default(false) @map("is_leap_month")
+  solarBirthDate String?   @map("solar_birth_date") @db.VarChar(10)
   note        String?
   enabled     Boolean      @default(true)
   createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)

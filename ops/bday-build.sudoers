@@ -1,0 +1,1 @@
+deploy-bday ALL=(root) NOPASSWD: /usr/local/sbin/k3s-build-deployment-image
