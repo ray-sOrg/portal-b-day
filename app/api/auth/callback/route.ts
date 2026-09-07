@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
       idTokenExpected: true,
     });
     const claims = tokens.claims();
+    if (typeof claims?.sid !== 'string' || !claims.sid) throw new Error('Missing OIDC session');
     const roles = (claims?.realm_access as RealmAccess | undefined)?.roles;
     if (!claims?.sub || !Array.isArray(roles) || !roles.includes("app-bday")) {
       await db.authAttempt.delete({ where: { stateHash: attempt.stateHash } });
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
       db.authAttempt.delete({ where: { stateHash: attempt.stateHash } }),
       db.authSession.deleteMany({ where: { expiresAt: { lte: new Date() } } }),
       db.authSession.create({
-        data: { tokenHash: digest(rawToken), subject: claims.sub, username, expiresAt },
+        data: { tokenHash: digest(rawToken), subject: claims.sub, username, oidcSid: claims.sid, expiresAt },
       }),
     ]);
 

@@ -17,6 +17,7 @@
   "dependencies": {
     "@prisma/client": "6.19.0",
     "date-fns": "4.1.0",
+    "jose": "^6",
     "lucide-react": "0.544.0",
     "lunar-javascript": "1.7.7",
     "next": "16.2.6",

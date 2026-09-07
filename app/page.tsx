@@ -58,7 +58,7 @@ export default async function Home() {
           </div>
           <div className="topbar-actions">
             <span className="signed-in-user">{user.username}</span>
-            <a className="logout-link" href="/api/auth/logout">退出</a>
+            <form action="/api/auth/logout" method="post"><button className="logout-link" type="submit">退出</button></form>
             <PersonForm />
           </div>
         </header>

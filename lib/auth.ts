@@ -47,7 +47,7 @@ export async function currentUser(): Promise<AuthUser | null> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
   const session = await db.authSession.findUnique({ where: { tokenHash: digest(token) } });
-  if (!session || session.expiresAt <= new Date()) return null;
+  if (!session || !session.oidcSid || session.expiresAt <= new Date()) return null;
   return { subject: session.subject, username: session.username };
 }
 

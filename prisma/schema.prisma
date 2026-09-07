@@ -130,10 +130,12 @@ model AuthSession {
   tokenHash String   @id @map("token_hash") @db.Char(64)
   subject   String   @db.VarChar(255)
   username  String   @db.VarChar(255)
+  oidcSid   String?  @map("oidc_sid") @db.VarChar(255)
   expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@index([subject])
+  @@index([oidcSid])
   @@index([expiresAt])
   @@map("auth_session")
   @@schema("bday")
