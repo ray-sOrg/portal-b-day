@@ -277,3 +277,14 @@ footer code { font-size: 10px; }
   .dialog-heading { padding: 24px 22px 18px; }
   .person-form { padding: 0 22px 24px; }
 }
+.welcome-page { max-width: 1160px; margin: 0 auto; padding: 40px 24px; }
+.welcome-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 64px; }
+.welcome-header .brand { display: flex; }
+.welcome-header .brand > span:last-child { display: block; }
+.welcome-page .hero { min-height: 430px; }
+.welcome-page h1 { font-family: var(--serif); font-size: clamp(28px, 4vw, 46px); line-height: 1.5; font-weight: 500; margin: 24px 0; }
+.welcome-page h1 em { color: #f0bc6c; font-style: normal; }
+.welcome-description { line-height: 1.9; margin-bottom: 28px; }
+.welcome-privacy { max-width: 330px; font-size: 12px; line-height: 1.8; margin-top: 20px; }
+.welcome-page a:focus-visible { outline: 2px solid var(--green); outline-offset: 5px; }
+@media (max-width: 640px) { .welcome-header { margin-bottom: 32px; } .welcome-header > .eyebrow { display: none; } }

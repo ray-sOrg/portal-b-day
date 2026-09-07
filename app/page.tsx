@@ -8,7 +8,8 @@ import { StatusPill } from "@/components/status-pill";
 import { deletePerson, deleteRule, toggleChannel, togglePerson } from "@/app/actions";
 import { birthdayLabel, sortUpcoming } from "@/lib/birthday";
 import { getDashboardData } from "@/lib/data";
-import { requireUser } from "@/lib/auth";
+import { currentUser } from "@/lib/auth";
+import { Welcome } from "@/components/welcome";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,8 @@ function initials(name: string) {
 }
 
 export default async function Home() {
-  const user = await requireUser();
+  const user = await currentUser();
+  if (!user) return <Welcome />;
   const data = await getDashboardData();
   const upcoming = sortUpcoming(data.people.filter((person) => person.enabled));
   const spotlight = upcoming[0];
