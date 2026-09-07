@@ -13,7 +13,8 @@ import { db } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
   const config = await oidcConfig();
-  const state = oidc.randomState();
+  const silent = request.nextUrl.searchParams.get("silent") === "1";
+  const state = (silent ? "silent." : "") + oidc.randomState();
   const nonce = oidc.randomNonce();
   const codeVerifier = oidc.randomPKCECodeVerifier();
   const codeChallenge = await oidc.calculatePKCECodeChallenge(codeVerifier);
@@ -35,9 +36,10 @@ export async function GET(request: NextRequest) {
     code_challenge_method: "S256",
     state,
     nonce,
+    ...(silent ? { prompt: "none" } : {}),
   });
   const response = NextResponse.redirect(authorizationUrl);
-  response.cookies.set(STATE_COOKIE, state, {
+  response.cookies.set(STATE_COOKIE + (silent ? "_silent" : ""), state, {
     httpOnly: true,
     secure: secureCookie(),
     sameSite: "lax",
@@ -46,4 +48,3 @@ export async function GET(request: NextRequest) {
   });
   return response;
 }
-

@@ -1,9 +1,11 @@
 import { CakeSlice, ChevronRight } from "lucide-react";
 import Link from "next/link";
+import { SilentSso } from "@/components/silent-sso";
 
 export function Welcome() {
   return (
     <main className="welcome-page">
+      <SilentSso loginUrl="/api/auth/login?silent=1" />
       <header className="welcome-header">
         <Link className="brand" href="/" aria-label="岁时首页">
           <span className="brand-seal">岁</span>

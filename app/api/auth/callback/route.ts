@@ -11,11 +11,14 @@ import {
   secureCookie,
 } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { silentResult } from "@/lib/silent-sso";
 
 type RealmAccess = { roles?: unknown };
 
 export async function GET(request: NextRequest) {
-  const state = request.cookies.get(STATE_COOKIE)?.value;
+  const silent = request.nextUrl.searchParams.get("state")?.startsWith("silent.") === true;
+  const stateCookie = STATE_COOKIE + (silent ? "_silent" : "");
+  const state = request.cookies.get(stateCookie)?.value;
   if (!state || request.nextUrl.searchParams.get("state") !== state) {
     return new NextResponse("登录状态无效，请重新登录。", { status: 400 });
   }
@@ -40,7 +43,7 @@ export async function GET(request: NextRequest) {
     const roles = (claims?.realm_access as RealmAccess | undefined)?.roles;
     if (!claims?.sub || !Array.isArray(roles) || !roles.includes("app-bday")) {
       await db.authAttempt.delete({ where: { stateHash: attempt.stateHash } });
-      return NextResponse.redirect(new URL("/unauthorized", appUrl()));
+      return silent ? silentResult(false, appUrl()) : NextResponse.redirect(new URL("/unauthorized", appUrl()));
     }
 
     const rawToken = sessionToken();
@@ -54,8 +57,8 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    const response = NextResponse.redirect(new URL(attempt.returnTo, appUrl()));
-    response.cookies.set(STATE_COOKIE, "", {
+    const response = silent ? silentResult(true, appUrl()) : NextResponse.redirect(new URL(attempt.returnTo, appUrl()));
+    response.cookies.set(stateCookie, "", {
       httpOnly: true,
       secure: secureCookie(),
       sameSite: "lax",
@@ -72,6 +75,6 @@ export async function GET(request: NextRequest) {
     return response;
   } catch {
     await db.authAttempt.deleteMany({ where: { stateHash: attempt.stateHash } });
-    return new NextResponse("统一登录失败，请重试。", { status: 400 });
+    return silent ? silentResult(false, appUrl()) : new NextResponse("统一登录失败，请重试。", { status: 400 });
   }
 }
