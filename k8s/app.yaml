@@ -17,6 +17,12 @@ spec:
           ports:
             - { name: http, containerPort: 3000 }
           env:
+            - name: OIDC_SESSION_ENFORCED
+              valueFrom:
+                configMapKeyRef:
+                  name: central-session-policy
+                  key: enforced
+                  optional: true
             - { name: TZ, value: Asia/Shanghai }
             - { name: APP_URL, value: "https://bday.tt829.cn" }
             - name: OIDC_ISSUER

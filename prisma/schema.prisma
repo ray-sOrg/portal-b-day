@@ -131,6 +131,8 @@ model AuthSession {
   subject   String   @db.VarChar(255)
   username  String   @db.VarChar(255)
   oidcSid   String?  @map("oidc_sid") @db.VarChar(255)
+  oidcRefreshToken String? @map("oidc_refresh_token")
+  oidcCheckedAt DateTime? @map("oidc_checked_at") @db.Timestamptz(3)
   expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 

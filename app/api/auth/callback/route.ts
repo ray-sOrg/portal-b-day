@@ -12,6 +12,7 @@ import {
 } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { silentResult } from "@/lib/silent-sso";
+import { sealRefreshToken } from "@/lib/central-session";
 
 type RealmAccess = { roles?: unknown };
 
@@ -53,7 +54,8 @@ export async function GET(request: NextRequest) {
       db.authAttempt.delete({ where: { stateHash: attempt.stateHash } }),
       db.authSession.deleteMany({ where: { expiresAt: { lte: new Date() } } }),
       db.authSession.create({
-        data: { tokenHash: digest(rawToken), subject: claims.sub, username, oidcSid: claims.sid, expiresAt },
+        data: { tokenHash: digest(rawToken), subject: claims.sub, username, oidcSid: claims.sid, expiresAt,
+          oidcRefreshToken: tokens.refresh_token ? sealRefreshToken(tokens.refresh_token) : null, oidcCheckedAt: new Date() },
       }),
     ]);
 

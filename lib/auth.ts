@@ -6,10 +6,11 @@ import * as oidc from "openid-client";
 import { db } from "@/lib/db";
 export { digest, safeReturnTo, sessionToken } from "@/lib/auth-utils";
 import { digest } from "@/lib/auth-utils";
+import { renewCentralSession } from "@/lib/central-session";
 
 export const SESSION_COOKIE = "bday_session";
 export const STATE_COOKIE = "bday_oidc_state";
-export const SESSION_LIFETIME_MS = 12 * 60 * 60 * 1000;
+export const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
 export const ATTEMPT_LIFETIME_MS = 10 * 60 * 1000;
 
 export type AuthUser = { subject: string; username: string };
@@ -48,6 +49,19 @@ export async function currentUser(): Promise<AuthUser | null> {
   if (!token) return null;
   const session = await db.authSession.findUnique({ where: { tokenHash: digest(token) } });
   if (!session || !session.oidcSid || session.expiresAt <= new Date()) return null;
+  if (process.env.OIDC_SESSION_ENFORCED === "true") {
+    if (!session.oidcRefreshToken) return null;
+    if (!session.oidcCheckedAt || Date.now() - session.oidcCheckedAt.getTime() >= 60000) {
+      const next = await renewCentralSession(session.oidcRefreshToken);
+      const where = {tokenHash: session.tokenHash, oidcRefreshToken: session.oidcRefreshToken};
+      if (!next) { await db.authSession.deleteMany({where}); return null; }
+      const updated = await db.authSession.updateMany({where, data: {oidcRefreshToken: next, oidcCheckedAt: new Date()}});
+      if (!updated.count) {
+        const latest = await db.authSession.findUnique({where: {tokenHash: session.tokenHash}});
+        if (!latest?.oidcCheckedAt || Date.now() - latest.oidcCheckedAt.getTime() >= 60000) return null;
+      } // Concurrent logout cannot be undone by renewal.
+    }
+  }
   return { subject: session.subject, username: session.username };
 }
 
