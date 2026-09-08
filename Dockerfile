@@ -6,7 +6,8 @@ RUN --mount=type=cache,id=bday-bun,target=/root/.bun/install/cache,sharing=locke
 
 FROM dependencies AS builder
 COPY . .
-RUN bun run build
+RUN --mount=type=cache,id=bday-next,target=/app/.next/cache \
+    bun run build
 
 # Keep the Prisma CLI for the existing migration hook, but omit test/lint tools.
 FROM oven/bun:1.3.10-alpine AS runtime-dependencies

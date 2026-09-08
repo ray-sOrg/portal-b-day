@@ -8,3 +8,14 @@ coverage
 *.log
 *.tsbuildinfo
 .DS_Store
+
+# Deployment and documentation must not invalidate application build layers.
+.github
+k8s
+docs
+AGENTS.md
+README*
+scripts/test-deploy-wait.py
+**/*.test.ts
+**/*.test.tsx
+vitest.config.*
