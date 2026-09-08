@@ -1,0 +1,3 @@
+[install]
+# Match the registry already used by the restaurant on the same build server.
+registry = "https://registry.npmmirror.com"

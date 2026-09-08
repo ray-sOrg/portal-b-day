@@ -15,6 +15,7 @@
     "reminder:dispatch": "bun scripts/dispatch-reminders.ts"
   },
   "dependencies": {
+    "prisma": "6.19.0",
     "@prisma/client": "6.19.0",
     "date-fns": "4.1.0",
     "jose": "^6",
@@ -37,7 +38,6 @@
     "eslint": "9.39.2",
     "eslint-config-next": "16.2.6",
     "jsdom": "26.1.0",
-    "prisma": "6.19.0",
     "typescript": "5.9.3",
     "vitest": "4.0.15"
   }
