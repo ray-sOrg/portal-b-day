@@ -162,13 +162,14 @@ jobs:
 
       - name: Notify WeCom
         if: always()
+        continue-on-error: true
         env:
           WECOM_WEBHOOK_URL: ${{ secrets.WECOM_WEBHOOK_URL }}
           DEPLOY_STATUS: ${{ job.status }}
         run: |
           if [ -z "$WECOM_WEBHOOK_URL" ]; then
-            echo "::error::WECOM_WEBHOOK_URL is not configured; deployment notification cannot be sent"
-            exit 1
+            echo "::warning::WECOM_WEBHOOK_URL is not configured; deployment notification was skipped"
+            exit 0
           fi
 
           ELAPSED=$(( $(date +%s) - ${DEPLOY_STARTED_AT:-$(date +%s)} ))
@@ -202,10 +203,16 @@ jobs:
             '$title + "\n> Project: **" + $project + "**\n> Status: <font color=\"" + $color + "\">" + $status + "</font>\n> Duration: " + $duration + "\n> Commit: [" + $short_sha + "](" + $commit_url + ") " + $subject + "\n> Service: [" + $service_url + "](" + $service_url + ")\n> Details: [GitHub Actions](" + $run_url + ")"')"
           PAYLOAD="$(jq -n --arg content "$CONTENT" \
             '{msgtype: "markdown", markdown: {content: $content}}')"
-          RESPONSE="$(curl --fail-with-body --silent --show-error \
-            --retry 2 --retry-all-errors \
+          if ! RESPONSE="$(curl --fail-with-body --silent --show-error \
+            --retry 2 --retry-all-errors --retry-delay 2 --retry-max-time 45 \
+            --connect-timeout 5 --max-time 15 \
             --header 'Content-Type: application/json' \
             --data "$PAYLOAD" \
-            "$WECOM_WEBHOOK_URL")"
+            "$WECOM_WEBHOOK_URL")"; then
+            echo "::warning::WeCom notification failed after bounded retries; deployment result is unchanged"
+            exit 0
+          fi
           echo "$RESPONSE"
-          test "$(jq -r '.errcode // -1' <<< "$RESPONSE")" = "0"
+          if [ "$(jq -r '.errcode // -1' <<< "$RESPONSE")" != "0" ]; then
+            echo "::warning::WeCom rejected the notification; deployment result is unchanged"
+          fi
