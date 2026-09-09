@@ -3,7 +3,7 @@ import pathlib
 import subprocess
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-PROJECTS = ['portal-b-day', 'portal-chuan-dai-h5', 'portal-console-web',
+PROJECTS = ['portal-auth', 'portal-b-day', 'portal-chuan-dai-h5', 'portal-console-web',
             'portal-weight-management', 'server-console']
 for project in PROJECTS:
     source = (ROOT / project / '.github/workflows/deploy.yml').read_text()

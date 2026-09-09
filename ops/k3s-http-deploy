@@ -53,6 +53,9 @@ project_settings() {
       health_host="bday.tt829.cn"
       health_path="/api/health"
       ;;
+    portal-auth)
+      deploy_user="deploy-auth"
+      ;;
     pwa-home)
       deploy_user="deploy"
       deployment="pwa-home-deployment"
@@ -171,6 +174,11 @@ deploy_job() {
       "$work_dir/deployment.yaml" \
       "$deploy_home/deployment.yaml" || return $?
 
+    if [ "$project" = "portal-auth" ]; then
+      /usr/local/sbin/k3s-deploy-auth || return $?
+      return 0
+    fi
+
     runuser -u "$deploy_user" -- \
       sudo -n /usr/local/sbin/k3s-build-deployment-image || return $?
     if [ "$project" = "portal-b-day" ]; then
@@ -250,4 +258,3 @@ mkdir -p "$jobs_dir"
 exec 9>"$state_dir/worker.lock"
 flock 9
 process_queue
-
