@@ -109,7 +109,7 @@ spec:
             - name: reminder
               image: __IMAGE_NAME__:__IMAGE_TAG__
               imagePullPolicy: Never
-              command: ["bun", "run", "reminder:dispatch"]
+              command: ["bun", ".runtime/dispatch-reminders.js"]
               envFrom:
                 - secretRef:
                     name: portal-b-day-wecom

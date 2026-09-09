@@ -1,0 +1,7 @@
+{
+  "name": "portal-b-day-runtime-tools",
+  "private": true,
+  "dependencies": {
+    "prisma": "6.19.0"
+  }
+}

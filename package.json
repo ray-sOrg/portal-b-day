@@ -15,7 +15,6 @@
     "reminder:dispatch": "bun scripts/dispatch-reminders.ts"
   },
   "dependencies": {
-    "prisma": "6.19.0",
     "@prisma/client": "6.19.0",
     "date-fns": "4.1.0",
     "jose": "^6",
@@ -30,6 +29,7 @@
     "zod": "4.1.11"
   },
   "devDependencies": {
+    "prisma": "6.19.0",
     "@testing-library/react": "16.3.0",
     "@types/node": "24.10.2",
     "@types/nodemailer": "7.0.1",
