@@ -1,0 +1,87 @@
+#!/bin/sh
+
+set -eu
+
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+case "${1:-}" in
+  "")
+    dry_run=0
+    ;;
+  --dry-run)
+    dry_run=1
+    ;;
+  *)
+    echo "Usage: $0 [--dry-run]" >&2
+    exit 2
+    ;;
+esac
+
+exec 9>/var/lock/k3s-deployment-build.lock
+flock 9
+
+work_dir="$(mktemp -d /var/tmp/k3s-image-prune.XXXXXX)"
+cleanup() {
+  rm -rf "$work_dir"
+}
+trap cleanup EXIT HUP INT TERM
+
+used_images="$work_dir/used-images"
+stored_images="$work_dir/stored-images"
+used_digests="$work_dir/used-digests"
+removed_digests="$work_dir/removed-digests"
+
+{
+  k3s kubectl get deployments,statefulsets,daemonsets,cronjobs -A -o json
+  k3s kubectl get pods -A \
+    --field-selector='status.phase!=Succeeded,status.phase!=Failed' -o json
+} | jq -r '.. | .image? // empty' |
+  grep -E '^localhost/[a-z0-9][a-z0-9-]*:build-[0-9]+-[0-9a-f]{7,40}$' |
+  sort -u >"$used_images"
+
+k3s ctr images list -q |
+  grep -E '^localhost/[a-z0-9][a-z0-9-]*:build-[0-9]+-[0-9a-f]{7,40}$' |
+  sort -u >"$stored_images"
+
+: >"$used_digests"
+while IFS= read -r image; do
+  k3s ctr images list "name==$image" | awk 'NR == 2 { print $3 }'
+done <"$used_images" | sort -u >"$used_digests"
+: >"$removed_digests"
+
+kept=0
+removed=0
+while IFS= read -r image; do
+  [ -n "$image" ] || continue
+  if grep -Fqx "$image" "$used_images"; then
+    kept=$((kept + 1))
+    continue
+  fi
+
+  if [ "$dry_run" -eq 1 ]; then
+    echo "Would remove unused deployment image: $image"
+  else
+    echo "Removing unused deployment image: $image"
+    k3s ctr images list "name==$image" | awk 'NR == 2 { print $3 }' >>"$removed_digests"
+    k3s ctr images rm "$image"
+  fi
+  removed=$((removed + 1))
+done <"$stored_images"
+
+if [ "$dry_run" -eq 0 ]; then
+  sort -u "$removed_digests" | while IFS= read -r digest; do
+    [ -n "$digest" ] || continue
+    grep -Fqx "$digest" "$used_digests" && continue
+    if k3s ctr images list -q | grep -Fqx "$digest"; then
+      echo "Removing unused deployment image digest: $digest"
+      k3s ctr images rm "$digest"
+    fi
+  done
+fi
+
+if [ "$dry_run" -eq 1 ]; then
+  echo "Deployment image cleanup preview: keep $kept, remove $removed."
+else
+  echo "Deployment image cleanup complete: kept $kept, removed $removed."
+fi

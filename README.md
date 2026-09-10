@@ -60,6 +60,6 @@ Ingress 通过 `portal-b-day-allowlist` 限制为受信任出口 IP 和私有网
 
 仓库 Actions Secrets 需要 `DEPLOY_HTTP_TOKEN`（仅该项目的部署权限）和 `WECOM_WEBHOOK_URL`（部署通知机器人，与生日自建应用分开）。数据库及生日通知 Secret 始终保留在集群。通知发送失败会让 CI 明确报错，不会静默跳过。
 
-`k8s/app.yaml` 是镜像占位符模板，由 CI 渲染成 `deployment.yaml`，不要直接应用未渲染的模板。服务器管理员安装 `ops/k3s-http-deploy`、`ops/k3s-build-deployment-image` 和 `ops/k3s-deploy-bday`；这些脚本不会随普通应用提交自动更新。前两者是共享部署服务的兼容扩展，其他项目流程保持不变。
+`k8s/app.yaml` 是镜像占位符模板，由 CI 渲染成 `deployment.yaml`，不要直接应用未渲染的模板。服务器管理员安装 `ops/k3s-http-deploy`、`ops/k3s-build-deployment-image`、`ops/k3s-deploy-bday` 和 `ops/k3s-prune-deployment-images`；这些脚本不会随普通应用提交自动更新。共享清理脚本会在每次部署后依据 Deployment、StatefulSet、DaemonSet、CronJob 及未结束 Pod 的实际引用，删除不再使用的历史 `localhost/*:build-*` 镜像；可先使用 `--dry-run` 查看将删除的精确镜像列表。
 
 迁移失败不更新网站；发布失败会回滚网站并恢复 CronJob 的上一份配置。已成功执行的数据库迁移不会逆向回滚，因此迁移必须与上一版应用兼容。部署权限定义见 `k8s/deployer-rbac.yaml`，不允许读取 Secret 或修改其他应用的 Deployment。

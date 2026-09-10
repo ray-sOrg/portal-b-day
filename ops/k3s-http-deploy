@@ -220,6 +220,11 @@ deploy_job() {
     write_status "$status_file" succeeded "Deployment and health check succeeded" 0
   fi
 
+  if [ -x /usr/local/sbin/k3s-prune-deployment-images ]; then
+    /usr/local/sbin/k3s-prune-deployment-images >>"$log_file" 2>&1 ||
+      echo "Warning: automatic deployment image cleanup failed." >>"$log_file"
+  fi
+
   rm -rf "$work_dir"
   rm -f \
     "$deploy_home/deployment-source.tar.gz" \
