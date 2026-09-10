@@ -43,9 +43,16 @@ body::before {
 main { min-width: 0; overflow: hidden; }
 .topbar { max-width: 1240px; margin: auto; padding: 34px 52px 26px; display: flex; justify-content: space-between; align-items: center; }
 .topbar-actions { display: flex; align-items: center; gap: 12px; }
-.signed-in-user { color: var(--ink-soft); font-size: 13px; }
-.logout-link { color: var(--ink-soft); font-size: 13px; text-decoration: none; }
-.logout-link:hover { color: var(--vermilion); }
+.account-panel { position: relative; min-width: 178px; height: 48px; padding: 5px 5px 5px 6px; display: grid; grid-template-columns: 36px minmax(0,1fr) 34px; align-items: center; gap: 9px; overflow: hidden; border: 1px solid var(--line); border-radius: 4px 17px 4px 17px; background: linear-gradient(125deg, rgba(255,255,255,.72), rgba(234,227,214,.55)); box-shadow: 0 7px 22px rgba(70,55,42,.07); }
+.account-panel::after { position: absolute; right: 8px; bottom: -7px; width: 24px; height: 13px; content: ""; border: 1px solid rgba(196,76,63,.18); border-radius: 50%; transform: rotate(-16deg); pointer-events: none; }
+.account-mark { width: 36px; height: 36px; display: grid; place-items: center; color: #f9f3e8; border-radius: 3px 11px 3px 11px; background: var(--green); box-shadow: inset 0 0 0 2px rgba(255,255,255,.16); font: 15px var(--serif); text-transform: uppercase; }
+.account-copy { min-width: 0; display: grid; gap: 2px; }
+.account-copy small { color: var(--muted); font-size: 8px; letter-spacing: .16em; }
+.account-copy strong { overflow: hidden; font: 12px var(--serif); font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.account-panel form { display: flex; }
+.account-logout { position: relative; z-index: 1; width: 32px; height: 32px; padding: 0; display: grid; place-items: center; color: var(--muted); border: 0; border-left: 1px solid var(--line); background: transparent; cursor: pointer; transition: color .15s ease, background .15s ease; }
+.account-logout:hover { color: var(--red-dark); background: rgba(196,76,63,.07); }
+.account-logout:focus-visible { color: var(--red-dark); outline: 2px solid var(--red); outline-offset: -3px; }
 .eyebrow { color: var(--red); font-size: 10px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; }
 .topbar h1 { margin: 7px 0 0; font: 21px var(--serif); letter-spacing: .03em; }
 .primary-button, .secondary-button { border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 0 18px; transition: .2s ease; }
@@ -252,6 +259,11 @@ footer code { font-size: 10px; }
   .sidebar nav a.active { color: var(--red) !important; }
   .sidebar nav span { display: block; }
   .topbar { padding: 24px 20px; }
+  .topbar-actions { gap: 8px; }
+  .account-panel { min-width: 75px; width: 75px; grid-template-columns: 32px 30px; gap: 6px; height: 42px; padding: 4px; }
+  .account-mark { width: 32px; height: 32px; }
+  .account-copy { display: none; }
+  .account-logout { width: 29px; height: 29px; }
   .topbar h1 { font-size: 16px; }
   .topbar .primary-button { width: 42px; padding: 0; font-size: 0; }
   .topbar .primary-button svg { width: 18px; }

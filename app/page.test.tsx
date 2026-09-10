@@ -33,6 +33,8 @@ it("keeps the birthday dashboard for an authenticated user", async () => {
   const html = renderToStaticMarkup(await Home());
   expect(html).toContain("完整生日簿");
   expect(html).toContain("test-user");
+  expect(html).toContain('class="account-panel"');
+  expect(html).toContain('aria-label="退出登录"');
   expect(html).not.toContain("使用统一账号登录");
   expect(getDashboardData).toHaveBeenCalledOnce();
 });

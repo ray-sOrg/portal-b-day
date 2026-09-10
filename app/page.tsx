@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
-import { BellRing, CalendarCheck2, CakeSlice, ChevronRight, Clock3, Gift, Mail, MoreHorizontal, Send, Sparkles, UsersRound } from "lucide-react";
+import { BellRing, CalendarCheck2, CakeSlice, ChevronRight, Clock3, Gift, LogOut, Mail, MoreHorizontal, Send, Sparkles, UsersRound } from "lucide-react";
 import { AddChannelForm, AddRuleForm } from "@/components/settings-forms";
 import { navItems } from "@/components/icons";
 import { PersonForm } from "@/components/person-form";
@@ -21,6 +21,10 @@ function daysCopy(days: number) {
 
 function initials(name: string) {
   return Array.from(name).slice(-2).join("");
+}
+
+function accountMark(name: string) {
+  return Array.from(name.trim())[0]?.toLocaleUpperCase() ?? "岁";
 }
 
 export default async function Home() {
@@ -59,8 +63,18 @@ export default async function Home() {
             <h1>早上好，今天也别忘了想念。</h1>
           </div>
           <div className="topbar-actions">
-            <span className="signed-in-user">{user.username}</span>
-            <form action="/api/auth/logout" method="post"><button className="logout-link" type="submit">退出</button></form>
+            <div className="account-panel">
+              <span className="account-mark" aria-hidden="true">{accountMark(user.username)}</span>
+              <span className="account-copy">
+                <small>已登录</small>
+                <strong title={user.username}>{user.username}</strong>
+              </span>
+              <form action="/api/auth/logout" method="post">
+                <button className="account-logout" type="submit" aria-label="退出登录" title="退出登录">
+                  <LogOut size={16} strokeWidth={1.8} />
+                </button>
+              </form>
+            </div>
             <PersonForm />
           </div>
         </header>
