@@ -11,14 +11,14 @@ function Fixture({ initial = "" }: { initial?: string }) {
 }
 it("accepts compact pasted dates and previews the birth-year lunar date", () => {
   render(<Fixture />);
-  fireEvent.change(screen.getByLabelText("公历出生日期"), { target: { value: "19940829" } });
-  expect((screen.getByLabelText("公历出生日期") as HTMLInputElement).value).toBe("1994-08-29");
-  expect(screen.getByText("公历 8月29日 · 农历 7月23日")).toBeTruthy();
-  expect(new FormData(screen.getByRole("form") as HTMLFormElement).get("solarBirthDate")).toBe("1994-08-29");
+  fireEvent.change(screen.getByLabelText("阳历出生日期"), { target: { value: "19940829" } });
+  expect((screen.getByLabelText("阳历出生日期") as HTMLInputElement).value).toBe("1994-08-29");
+  expect(screen.getByText("公历 1994年8月29日 · 农历 1994年7月23日")).toBeTruthy();
+  expect(new FormData(screen.getByRole("form") as HTMLFormElement).get("birthDate")).toBe("1994-08-29");
 });
 it("does not rewrite a partially typed day before the user finishes", () => {
   render(<Fixture />);
-  const input = screen.getByLabelText("公历出生日期") as HTMLInputElement;
+  const input = screen.getByLabelText("阳历出生日期") as HTMLInputElement;
   fireEvent.change(input, { target: { value: "1994-08-2" } });
   expect(input.value).toBe("1994-08-2");
   fireEvent.change(input, { target: { value: "1994-08-29" } });
@@ -26,7 +26,7 @@ it("does not rewrite a partially typed day before the user finishes", () => {
 });
 it("blocks impossible dates and clears without leaving a stale saved date", () => {
   render(<Fixture initial="1994-08-29" />);
-  const input = screen.getByLabelText("公历出生日期") as HTMLInputElement;
+  const input = screen.getByLabelText("阳历出生日期") as HTMLInputElement;
   fireEvent.change(input, { target: { value: "1994-02-29" } });
   fireEvent.blur(input);
   expect(input.checkValidity()).toBe(false);
@@ -34,7 +34,7 @@ it("blocks impossible dates and clears without leaving a stale saved date", () =
   fireEvent.click(screen.getByRole("button", { name: "清空出生日期" }));
   expect(input.value).toBe("");
   expect(input.validity.customError).toBe(false);
-  expect(new FormData(screen.getByRole("form") as HTMLFormElement).get("solarBirthDate")).toBe("");
+  expect(new FormData(screen.getByRole("form") as HTMLFormElement).get("birthDate")).toBe("");
 });
 it("jumps through year/month dropdowns and Escape closes only the calendar", () => {
   render(<Fixture initial="1994-08-29" />);
@@ -53,7 +53,25 @@ it("fills the chosen calendar day and returns focus to the trigger", () => {
   const trigger = screen.getByRole("button", { name: "选择出生日期" });
   fireEvent.click(trigger);
   fireEvent.click(screen.getByRole("button", { name: "1994年8月15日 星期一" }));
-  expect((screen.getByLabelText("公历出生日期") as HTMLInputElement).value).toBe("1994-08-15");
+  expect((screen.getByLabelText("阳历出生日期") as HTMLInputElement).value).toBe("1994-08-15");
   expect(screen.queryByRole("group", { name: "出生日期日历" })).toBeNull();
   expect(document.activeElement).toBe(trigger);
+});
+it("enters a lunar date and exposes the selected input calendar", () => {
+  render(<Fixture />);
+  fireEvent.click(screen.getByRole("button", { name: "农历录入" }));
+  const input = screen.getByLabelText("农历出生日期") as HTMLInputElement;
+  fireEvent.change(input, { target: { value: "19681227" } });
+  expect(input.value).toBe("1968-12-27");
+  expect(screen.getByText("公历 1969年2月13日 · 农历 1968年12月27日")).toBeTruthy();
+  const formData = new FormData(screen.getByRole("form") as HTMLFormElement);
+  expect(formData.get("birthDateCalendar")).toBe("LUNAR");
+  expect(formData.get("birthDate")).toBe("1968-12-27");
+});
+it("preserves the birthday when switching a valid date between calendars", () => {
+  render(<Fixture initial="1969-02-13" />);
+  fireEvent.click(screen.getByRole("button", { name: "农历录入" }));
+  expect((screen.getByLabelText("农历出生日期") as HTMLInputElement).value).toBe("1968-12-27");
+  fireEvent.click(screen.getByRole("button", { name: "阳历录入" }));
+  expect((screen.getByLabelText("阳历出生日期") as HTMLInputElement).value).toBe("1969-02-13");
 });

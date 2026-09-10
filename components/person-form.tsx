@@ -13,7 +13,7 @@ export function PersonForm({ person, trigger = "button" }: { person?: PersonView
   const [state, action, pending] = useActionState(savePerson, initialState);
   const [calendar, setCalendar] = useState(person?.calendar ?? "BOTH");
 
-  const [solarBirthDate, setSolarBirthDate] = useState(person?.solarBirthDate ?? "");
+  const [birthDateValue, setBirthDateValue] = useState(person?.solarBirthDate ?? "");
 
   return (
     <>
@@ -52,8 +52,8 @@ export function PersonForm({ person, trigger = "button" }: { person?: PersonView
                 <option value="LUNAR">农历</option>
               </select>
             </label>
-            <BirthDateInput value={solarBirthDate} onChange={setSolarBirthDate} required={calendar === "BOTH"} />
-            {solarBirthDate || calendar === "BOTH" ? <>
+            <BirthDateInput value={birthDateValue} onChange={setBirthDateValue} required={calendar === "BOTH"} />
+            {birthDateValue || calendar === "BOTH" ? <>
               <input type="hidden" name="birthYear" value="" />
               <input type="hidden" name="birthMonth" value="1" />
               <input type="hidden" name="birthDay" value="1" />
